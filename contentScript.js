@@ -171,8 +171,18 @@
     const footer = document.createElement('div');
     footer.style.cssText = `
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
       margin-top: 4px;
+      gap: 12px;
+    `;
+
+    const hintText = document.createElement('span');
+    hintText.textContent = 'Enter: 다음단계 | ESC: 현재단계유지';
+    hintText.style.cssText = `
+      font-size: 12px;
+      color: #6b7280;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
 
     const copyButton = document.createElement('button');
@@ -214,6 +224,7 @@
       });
     });
 
+    footer.appendChild(hintText);
     footer.appendChild(copyButton);
 
     modal.appendChild(title);
