@@ -21,7 +21,14 @@
     {
       "matches": ["<all_urls>"],
       "js": ["contentScript.js"],
+      "type": "module",
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["mouseIntentDetector.js"],
+      "matches": ["<all_urls>"]
     }
   ],
   "icons": {
