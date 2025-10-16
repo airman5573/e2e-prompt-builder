@@ -1,10 +1,18 @@
 (() => {
   let inspectorEnabled = false;
-  let currentHighlightedElement = null;
   let highlightOverlay = null;
   let rafId = null;
   let queuedElementForUpdate = null;
   let lastOverlayRect = null;
+
+  const state = {
+    mode: 'highlight',
+    currentElement: null,
+    promptText: '',
+    currentStepNumber: 1,
+    isModalOpen: false,
+    caretPosition: 0,
+  };
 
   function initializeStyles() {
     if (!document.querySelector('#element-inspector-highlight-style')) {
@@ -14,7 +22,7 @@
         .__element-inspector-overlay__ {
           position: fixed !important;
           pointer-events: none !important;
-          z-index: 2147483647 !important;
+          z-index: 999998 !important;
           border: 3px solid red !important;
           background-color: rgba(255, 0, 0, 0.1) !important;
           box-sizing: border-box !important;
@@ -58,6 +66,176 @@
         }
       `;
       document.head.appendChild(style);
+    }
+  }
+
+  function ensureModalUI() {
+    let overlay = document.querySelector('#e2e-prompt-overlay');
+    if (overlay) {
+      return overlay;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = 'e2e-prompt-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(17, 24, 39, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      padding: 24px;
+      box-sizing: border-box;
+    `;
+    overlay.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+    });
+
+    const modal = document.createElement('div');
+    modal.id = 'e2e-prompt-modal';
+    modal.style.cssText = `
+      width: 420px;
+      max-width: 80vw;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    modal.addEventListener('click', (event) => event.stopPropagation());
+
+    const title = document.createElement('h2');
+    title.textContent = 'E2E 테스트 시나리오';
+    title.style.cssText = `
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+    `;
+
+    const textarea = document.createElement('textarea');
+    textarea.id = 'prompt-textarea';
+    textarea.setAttribute('spellcheck', 'false');
+    textarea.style.cssText = `
+      width: 100%;
+      min-height: 200px;
+      max-height: 60vh;
+      resize: vertical;
+      padding: 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #111827;
+      background: #f9fafb;
+      box-sizing: border-box;
+      outline: none;
+    `;
+
+    textarea.addEventListener('keydown', (event) => {
+      if (!state.isModalOpen) {
+        return;
+      }
+
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        handleEnter();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        handleEscape();
+      }
+    });
+
+    textarea.addEventListener('input', () => {
+      state.promptText = textarea.value;
+      state.caretPosition = textarea.selectionStart;
+    });
+
+    textarea.addEventListener('click', () => {
+      state.caretPosition = textarea.selectionStart;
+    });
+
+    textarea.addEventListener('keyup', () => {
+      state.caretPosition = textarea.selectionStart;
+    });
+
+    const footer = document.createElement('div');
+    footer.style.cssText = `
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 4px;
+    `;
+
+    const copyButton = document.createElement('button');
+    copyButton.id = 'copy-prompt-btn';
+    copyButton.type = 'button';
+    copyButton.textContent = '복사하기';
+    copyButton.style.cssText = `
+      padding: 10px 16px;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    `;
+
+    copyButton.addEventListener('click', () => {
+      const promptTextarea = getTextarea();
+      if (!promptTextarea) {
+        return;
+      }
+
+      state.promptText = promptTextarea.value;
+      state.caretPosition = promptTextarea.selectionStart;
+
+      navigator.clipboard.writeText(state.promptText).then(() => {
+        copyButton.textContent = '복사됨!';
+        window.setTimeout(() => {
+          copyButton.textContent = '복사하기';
+        }, 2000);
+      }).catch(() => {
+        showSnackbar('❌ 복사 실패');
+      });
+    });
+
+    footer.appendChild(copyButton);
+
+    modal.appendChild(title);
+    modal.appendChild(textarea);
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    return overlay;
+  }
+
+  function getTextarea() {
+    return document.querySelector('#prompt-textarea');
+  }
+
+  function showModalUI() {
+    const overlay = ensureModalUI();
+    overlay.style.display = 'flex';
+    const copyButton = document.querySelector('#copy-prompt-btn');
+    if (copyButton) {
+      copyButton.textContent = '복사하기';
+    }
+  }
+
+  function hideModalUI() {
+    const overlay = document.querySelector('#e2e-prompt-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
     }
   }
 
@@ -120,19 +298,6 @@
     }
   }
 
-  function handleMouseOver(event) {
-    currentHighlightedElement = event.target;
-    createOverlay();
-    updateOverlayPosition(event.target);
-  }
-
-  function handleMouseOut(event) {
-    if (currentHighlightedElement === event.target) {
-      removeOverlay();
-      currentHighlightedElement = null;
-    }
-  }
-
   function findElementWithId(element) {
     let current = element;
     while (current && current !== document.body) {
@@ -142,6 +307,161 @@
       current = current.parentElement;
     }
     return null;
+  }
+
+  function ensureCurrentElement() {
+    if (state.currentElement && document.contains(state.currentElement)) {
+      return state.currentElement;
+    }
+    state.currentElement = null;
+    return null;
+  }
+
+  function highlightElement(element) {
+    if (!element || state.mode !== 'highlight') {
+      return;
+    }
+
+    state.currentElement = element;
+    createOverlay();
+    updateOverlayPosition(element);
+
+    if (typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+
+      window.setTimeout(() => {
+        if (state.currentElement === element) {
+          updateOverlayPosition(element);
+        }
+      }, 300);
+    }
+  }
+
+  function navigateToParent() {
+    const activeElement = ensureCurrentElement();
+    if (!activeElement) {
+      return;
+    }
+
+    let parent = activeElement.parentElement;
+    while (parent) {
+      if (parent.id) {
+        highlightElement(parent);
+        return;
+      }
+      parent = parent.parentElement;
+    }
+
+    showSnackbar('⚠️ ID가 있는 부모를 찾을 수 없습니다', 1200, '#ff9800');
+  }
+
+  function navigateToChild() {
+    const activeElement = ensureCurrentElement();
+    if (!activeElement) {
+      return;
+    }
+
+    const findChildWithId = (element) => {
+      for (const child of element.children) {
+        if (child.id) {
+          return child;
+        }
+        const found = findChildWithId(child);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    };
+
+    const child = findChildWithId(activeElement);
+    if (child) {
+      highlightElement(child);
+    } else {
+      showSnackbar('⚠️ ID가 있는 자식을 찾을 수 없습니다', 1200, '#ff9800');
+    }
+  }
+
+  function insertAt(text, index, value) {
+    const safeIndex = Math.min(Math.max(index, 0), text.length);
+    return text.slice(0, safeIndex) + value + text.slice(safeIndex);
+  }
+
+  function openModal() {
+    const elementForPrompt = ensureCurrentElement();
+    if (!elementForPrompt || !elementForPrompt.id) {
+      showSnackbar('⚠️ ID를 찾을 수 없습니다');
+      return;
+    }
+
+    const overlay = ensureModalUI();
+    const textarea = getTextarea();
+    if (!textarea || !overlay) {
+      return;
+    }
+
+    const elementToken = `#${elementForPrompt.id} `;
+    const isFirstStep = state.promptText === '' && state.currentStepNumber === 1;
+
+    if (isFirstStep) {
+      state.promptText = `1. ${elementToken}`;
+      state.caretPosition = state.promptText.length;
+    } else {
+      const insertionIndex = typeof state.caretPosition === 'number' ? state.caretPosition : state.promptText.length;
+      state.promptText = insertAt(state.promptText, insertionIndex, elementToken);
+      state.caretPosition = insertionIndex + elementToken.length;
+    }
+
+    textarea.value = state.promptText;
+    state.mode = 'modal-open';
+    state.isModalOpen = true;
+
+    showModalUI();
+
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = state.caretPosition;
+      textarea.selectionEnd = state.caretPosition;
+    });
+  }
+
+  function closeModal() {
+    const textarea = getTextarea();
+    if (textarea) {
+      textarea.value = state.promptText;
+    }
+
+    state.mode = 'highlight';
+    state.isModalOpen = false;
+    hideModalUI();
+  }
+
+  function handleEnter() {
+    const textarea = getTextarea();
+    if (!textarea) {
+      return;
+    }
+
+    state.promptText = textarea.value;
+    state.caretPosition = textarea.selectionStart;
+
+    state.currentStepNumber += 1;
+    state.promptText = `${state.promptText}\n${state.currentStepNumber}. `;
+    state.caretPosition = state.promptText.length;
+
+    closeModal();
+  }
+
+  function handleEscape() {
+    const textarea = getTextarea();
+    if (!textarea) {
+      return;
+    }
+
+    state.promptText = textarea.value;
+    state.caretPosition = textarea.selectionStart;
+
+    closeModal();
   }
 
   function showSnackbar(message, duration = 3000, backgroundColor = '#323232') {
@@ -165,77 +485,65 @@
     }, duration);
   }
 
-  function highlightElement(element) {
-    if (!element) return;
+  function handleMouseOver(event) {
+    if (!inspectorEnabled || state.mode !== 'highlight') {
+      return;
+    }
 
-    currentHighlightedElement = element;
-    createOverlay();
-    updateOverlayPosition(element);
+    const elementWithId = event.target?.id ? event.target : findElementWithId(event.target);
+    if (!elementWithId || !elementWithId.id) {
+      return;
+    }
 
-    if (typeof element.scrollIntoView === 'function') {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    if (state.currentElement === elementWithId) {
+      updateOverlayPosition(elementWithId);
+      return;
+    }
 
-      window.setTimeout(() => {
-        updateOverlayPosition(element);
-      }, 500);
+    highlightElement(elementWithId);
+  }
+
+  function handleMouseOut(event) {
+    if (state.mode !== 'highlight') {
+      return;
+    }
+
+    if (state.currentElement === event.target) {
+      removeOverlay();
+      state.currentElement = null;
     }
   }
 
   function handleKeyDown(event) {
-    if (!currentHighlightedElement) return;
+    if (!inspectorEnabled) {
+      return;
+    }
 
-    const key = event.key;
+    if (state.mode !== 'highlight') {
+      return;
+    }
 
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+    const activeElement = ensureCurrentElement();
+    if (!activeElement) {
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
       event.preventDefault();
-
-      let targetElement = null;
-
-      switch (key) {
-        case 'ArrowUp':
-          targetElement = currentHighlightedElement.parentElement;
-          break;
-        case 'ArrowDown':
-          targetElement = currentHighlightedElement.firstElementChild;
-          break;
-        case 'ArrowLeft':
-          targetElement = currentHighlightedElement.previousElementSibling;
-          break;
-        case 'ArrowRight':
-          targetElement = currentHighlightedElement.nextElementSibling;
-          break;
-        default:
-          break;
-      }
-
-      if (targetElement) {
-        highlightElement(targetElement);
-      } else {
-        showSnackbar('⚠️ 이동할 수 없습니다', 1000, '#ff9800');
-      }
-    } else if (event.code === 'Space') {
+      navigateToParent();
+    } else if (event.key === 'ArrowDown') {
       event.preventDefault();
-
-      const elementWithId = findElementWithId(currentHighlightedElement);
-
-      if (elementWithId && elementWithId.id) {
-        navigator.clipboard.writeText(elementWithId.id).then(() => {
-          showSnackbar(`📋 Copied: ${elementWithId.id}`);
-          console.log(`✅ ID 복사됨: ${elementWithId.id}`);
-        }).catch((err) => {
-          console.error('클립보드 복사 실패:', err);
-          showSnackbar('❌ 복사 실패');
-        });
-      } else {
-        showSnackbar('⚠️ ID를 찾을 수 없습니다');
-        console.warn('ID가 있는 element를 찾을 수 없습니다');
-      }
+      navigateToChild();
+    } else if (event.code === 'Space' || event.key === ' ') {
+      event.preventDefault();
+      openModal();
     }
   }
 
   function handleScrollOrResize() {
-    if (currentHighlightedElement) {
-      updateOverlayPosition(currentHighlightedElement);
+    const activeElement = ensureCurrentElement();
+    if (activeElement) {
+      updateOverlayPosition(activeElement);
     }
   }
 
@@ -256,20 +564,28 @@
   }
 
   function enableInspector() {
-    if (inspectorEnabled) return;
+    if (inspectorEnabled) {
+      return;
+    }
 
     initializeStyles();
+    ensureModalUI();
+    hideModalUI();
     attachEventListeners();
     inspectorEnabled = true;
     console.log('[Element Inspector] 활성화됨');
   }
 
   function disableInspector() {
-    if (!inspectorEnabled) return;
+    if (!inspectorEnabled) {
+      return;
+    }
 
     detachEventListeners();
     removeOverlay();
-    currentHighlightedElement = null;
+    hideModalUI();
+    state.mode = 'highlight';
+    state.isModalOpen = false;
     inspectorEnabled = false;
 
     const snackbar = document.querySelector('.element-inspector-snackbar');
