@@ -31,6 +31,28 @@ cp "background.js" "${DIST_DIR}/"
 cp "contentScript.js" "${DIST_DIR}/"
 cp "options.html" "${DIST_DIR}/"
 cp "options.js" "${DIST_DIR}/"
+
+MODULE_FILES=(
+  "attributeManager.js"
+  "modalUI.js"
+  "overlayManager.js"
+  "snackbar.js"
+)
+
+for module in "${MODULE_FILES[@]}"; do
+  if [[ ! -f "${module}" ]]; then
+    echo "Warning: ${module} not found; skipping."
+    continue
+  fi
+  cp "${module}" "${DIST_DIR}/"
+done
+
+if [[ -f "mouseIntentDetector.js" ]]; then
+  cp "mouseIntentDetector.js" "${DIST_DIR}/"
+else
+  echo "Warning: mouseIntentDetector.js not found; skipping."
+fi
+
 cp -R "icons" "${DIST_DIR}/"
 
 # Create ZIP
