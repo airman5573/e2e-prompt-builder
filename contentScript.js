@@ -4,6 +4,8 @@
   let rafId = null;
   let queuedElementForUpdate = null;
   let lastOverlayRect = null;
+  let lastMousePosition = null;
+  let modalOpenMousePosition = null;
 
   const ATTRIBUTE_PRIORITY = ['id', 'data-testid', 'data-test', 'class', 'aria-label', 'name', 'placeholder'];
   const DEFAULT_ATTRIBUTE_PREFERENCES = ['id'];
@@ -412,6 +414,35 @@
     }
   }
 
+  function trackMousePosition(event) {
+    if (!event || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+      return;
+    }
+
+    lastMousePosition = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+  }
+
+  function handleModalMouseMove(event) {
+    if (!state.isModalOpen || !modalOpenMousePosition) {
+      return;
+    }
+
+    const currentX = typeof event.clientX === 'number' ? event.clientX : modalOpenMousePosition.x;
+    const currentY = typeof event.clientY === 'number' ? event.clientY : modalOpenMousePosition.y;
+    const dx = currentX - modalOpenMousePosition.x;
+    const dy = currentY - modalOpenMousePosition.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > 80) {
+      handleEscape();
+      document.removeEventListener('mousemove', handleModalMouseMove, true);
+      modalOpenMousePosition = null;
+    }
+  }
+
   function updateOverlayPosition(element) {
     if (!highlightOverlay || !element) return;
 
@@ -561,7 +592,7 @@
     return text.slice(0, safeIndex) + value + text.slice(safeIndex);
   }
 
-  function openModal() {
+  function openModal(openEvent) {
     const elementForPrompt = ensureCurrentElement();
     if (!elementForPrompt) {
       showSnackbar('⚠️ 선택된 요소가 없습니다');
@@ -599,6 +630,22 @@
     state.mode = 'modal-open';
     state.isModalOpen = true;
 
+    const eventIsMouseEvent = typeof MouseEvent !== 'undefined' && openEvent instanceof MouseEvent;
+    const fromEvent = eventIsMouseEvent
+      ? { x: openEvent.clientX, y: openEvent.clientY }
+      : null;
+    if (fromEvent) {
+      modalOpenMousePosition = fromEvent;
+    } else if (lastMousePosition) {
+      modalOpenMousePosition = { x: lastMousePosition.x, y: lastMousePosition.y };
+    } else {
+      modalOpenMousePosition = null;
+    }
+    document.removeEventListener('mousemove', handleModalMouseMove, true);
+    if (modalOpenMousePosition) {
+      document.addEventListener('mousemove', handleModalMouseMove, true);
+    }
+
     showModalUI();
 
     window.requestAnimationFrame(() => {
@@ -616,6 +663,8 @@
 
     state.mode = 'highlight';
     state.isModalOpen = false;
+    document.removeEventListener('mousemove', handleModalMouseMove, true);
+    modalOpenMousePosition = null;
     hideModalUI();
   }
 
@@ -675,6 +724,7 @@
   }
 
   function handleMouseOver(event) {
+    trackMousePosition(event);
     if (!inspectorEnabled || state.mode !== 'highlight') {
       return;
     }
@@ -695,6 +745,7 @@
   }
 
   function handleMouseOut(event) {
+    trackMousePosition(event);
     if (state.mode !== 'highlight') {
       return;
     }
@@ -729,7 +780,7 @@
       navigateToChild();
     } else if (event.code === 'Space' || event.key === ' ') {
       event.preventDefault();
-      openModal();
+      openModal(event);
     }
   }
 
@@ -744,6 +795,7 @@
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('mouseout', handleMouseOut, true);
     document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('mousemove', trackMousePosition, true);
     window.addEventListener('scroll', handleScrollOrResize, true);
     window.addEventListener('resize', handleScrollOrResize, true);
   }
@@ -752,6 +804,7 @@
     document.removeEventListener('mouseover', handleMouseOver, true);
     document.removeEventListener('mouseout', handleMouseOut, true);
     document.removeEventListener('keydown', handleKeyDown, true);
+    document.removeEventListener('mousemove', trackMousePosition, true);
     window.removeEventListener('scroll', handleScrollOrResize, true);
     window.removeEventListener('resize', handleScrollOrResize, true);
   }
@@ -777,11 +830,14 @@
     detachEventListeners();
     removeOverlay();
     hideModalUI();
+    document.removeEventListener('mousemove', handleModalMouseMove, true);
     state.mode = 'highlight';
     state.isModalOpen = false;
     state.currentElement = null;
     state.currentSelector = null;
     state.currentAttribute = null;
+    modalOpenMousePosition = null;
+    lastMousePosition = null;
     inspectorEnabled = false;
 
     const snackbar = document.querySelector('.element-inspector-snackbar');
