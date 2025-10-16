@@ -64,6 +64,20 @@
         gap: 12px;
         margin-bottom: 24px;
       }
+      .section {
+        margin-bottom: 32px;
+      }
+      .section-title {
+        margin: 0 0 12px;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .section-description {
+        margin: 0 0 16px;
+        font-size: 14px;
+        color: var(--muted);
+      }
       label {
         display: flex;
         align-items: center;
@@ -84,6 +98,33 @@
         width: 18px;
         height: 18px;
         accent-color: var(--accent);
+      }
+      input[type='text'] {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-size: 15px;
+        background: rgba(37, 99, 235, 0.04);
+        color: inherit;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+      }
+      input[type='text']::placeholder {
+        color: var(--muted);
+      }
+      input[type='text']:focus {
+        outline: none;
+        border-color: var(--accent);
+        background: rgba(37, 99, 235, 0.08);
+      }
+      .custom-input-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .custom-input-row button {
+        flex-shrink: 0;
+        padding: 10px 18px;
       }
       .label-text {
         display: flex;
@@ -120,6 +161,42 @@
       button:active {
         transform: translateY(0);
       }
+      .custom-attribute-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .custom-attribute-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(148, 163, 184, 0.12);
+      }
+      .custom-attribute-name {
+        font-size: 15px;
+        font-weight: 500;
+      }
+      .custom-attribute-remove {
+        border: none;
+        background: none;
+        color: var(--muted);
+        font-size: 14px;
+        cursor: pointer;
+        padding: 6px 10px;
+        border-radius: 8px;
+        transition: color 0.2s ease, background-color 0.2s ease;
+      }
+      .custom-attribute-remove:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+      }
       .status {
         font-size: 14px;
         color: var(--muted);
@@ -128,6 +205,14 @@
       }
       .status.visible {
         opacity: 1;
+      }
+      .empty-state {
+        font-size: 14px;
+        color: var(--muted);
+        padding: 12px 0;
+      }
+      .empty-state.hidden {
+        display: none;
       }
       .shortcut-hint {
         margin-top: 16px;
@@ -140,57 +225,43 @@
     <main>
       <h1>Attribute Selection</h1>
       <p class="description">Choose which HTML attributes you want to capture when creating your E2E prompts.</p>
-      <form id="options-form" class="checkbox-list">
-        <label>
-          <input type="checkbox" name="attribute" value="id" checked />
-          <span class="label-text">
-            <span class="primary">ID</span>
-            <span class="secondary">Unique element identifiers</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="class" />
-          <span class="label-text">
-            <span class="primary">Class</span>
-            <span class="secondary">Reusable styling hooks</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="data-testid" />
-          <span class="label-text">
-            <span class="primary">data-testid</span>
-            <span class="secondary">Testing attributes for component libraries</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="data-test" />
-          <span class="label-text">
-            <span class="primary">data-test</span>
-            <span class="secondary">Alternate testing attribute</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="aria-label" />
-          <span class="label-text">
-            <span class="primary">aria-label</span>
-            <span class="secondary">Accessible labels for screen readers</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="name" />
-          <span class="label-text">
-            <span class="primary">Name</span>
-            <span class="secondary">Form field names and identifiers</span>
-          </span>
-        </label>
-        <label>
-          <input type="checkbox" name="attribute" value="placeholder" />
-          <span class="label-text">
-            <span class="primary">Placeholder</span>
-            <span class="secondary">Input hint text</span>
-          </span>
-        </label>
-      </form>
+      <section class="section">
+        <h2 id="built-in-attributes" class="section-title">Built-in attributes</h2>
+        <form id="options-form" class="checkbox-list" aria-labelledby="built-in-attributes">
+          <label>
+            <input type="checkbox" name="attribute" value="id" checked />
+            <span class="label-text">
+              <span class="primary">ID</span>
+              <span class="secondary">Unique element identifiers</span>
+            </span>
+          </label>
+          <label>
+            <input type="checkbox" name="attribute" value="class" />
+            <span class="label-text">
+              <span class="primary">Class</span>
+              <span class="secondary">Reusable styling hooks</span>
+            </span>
+          </label>
+        </form>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Custom attributes</h2>
+        <p class="section-description">Add any other attributes you want captured. They will be used after the built-in ones.</p>
+        <form id="custom-attribute-form" class="custom-input-row">
+          <input
+            id="custom-attribute-input"
+            type="text"
+            name="custom-attribute"
+            placeholder="e.g. data-testid"
+            autocomplete="off"
+          />
+          <button type="submit" id="add-custom-attribute-button">Add</button>
+        </form>
+        <div id="custom-attributes-empty-state" class="empty-state">No custom attributes yet.</div>
+        <ul id="custom-attributes-list" class="custom-attribute-list" aria-live="polite"></ul>
+      </section>
+
       <div class="actions">
         <button type="button" id="save-button">Save Settings</button>
         <span id="status" class="status" role="status" aria-live="polite">Saved!</span>

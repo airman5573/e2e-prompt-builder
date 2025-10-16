@@ -6,11 +6,33 @@
   let lastOverlayRect = null;
   let lastMousePosition = null;
   let modalOpenMousePosition = null;
+  let mouseIntentDetector = null;
+  const mouseIntentDetectorPromise = import(chrome.runtime.getURL('mouseIntentDetector.js'))
+    .then((module) => {
+      const DetectorClass = module?.default ?? module.MouseIntentDetector ?? module;
+      if (typeof DetectorClass !== 'function') {
+        throw new TypeError('MouseIntentDetector module did not provide a constructor.');
+      }
+      mouseIntentDetector = new DetectorClass({ distanceThreshold: 280 });
+      return mouseIntentDetector;
+    })
+    .catch((error) => {
+      console.warn('[E2E Prompt Builder] Failed to load MouseIntentDetector', error);
+      mouseIntentDetector = null;
+      return null;
+    });
 
-  const ATTRIBUTE_PRIORITY = ['id', 'data-testid', 'data-test', 'class', 'aria-label', 'name', 'placeholder'];
-  const DEFAULT_ATTRIBUTE_PREFERENCES = ['id'];
-  let activeAttributePreferences = [...DEFAULT_ATTRIBUTE_PREFERENCES];
-  let activeAttributeSet = new Set(activeAttributePreferences);
+  function ensureMouseIntentDetector() {
+    return mouseIntentDetectorPromise;
+  }
+
+  const STORAGE_KEY = 'attributePreferences';
+  const BUILT_IN_ATTRIBUTE_VALUES = ['id', 'class'];
+  const DEFAULT_PREFERENCES = {
+    builtInAttributes: ['id'],
+    customAttributes: [],
+  };
+  let attributePriority = buildPriorityList(DEFAULT_PREFERENCES);
 
   const state = {
     mode: 'highlight',
@@ -22,6 +44,123 @@
     isModalOpen: false,
     caretPosition: 0,
   };
+
+  function sanitizeAttributeName(name) {
+    return typeof name === 'string' ? name.trim() : '';
+  }
+
+  function isValidAttributeFormat(name) {
+    return /^[a-zA-Z_][a-zA-Z0-9_\-:.]*$/.test(name);
+  }
+
+  function uniqueCustomAttributes(attributes) {
+    const seen = new Set();
+    const result = [];
+    attributes.forEach((attribute) => {
+      const lower = attribute.toLowerCase();
+      if (seen.has(lower)) {
+        return;
+      }
+      seen.add(lower);
+      result.push(attribute);
+    });
+    return result;
+  }
+
+  function ensureBuiltInSelection(selectedBuiltIns) {
+    const selectedSet = new Set(
+      Array.isArray(selectedBuiltIns)
+        ? selectedBuiltIns.map((value) => value.toLowerCase()).filter(Boolean)
+        : []
+    );
+    const ordered = BUILT_IN_ATTRIBUTE_VALUES.filter((value) => selectedSet.has(value));
+    if (ordered.length) {
+      return ordered;
+    }
+    return [...DEFAULT_PREFERENCES.builtInAttributes];
+  }
+
+  function normalizeStoredPreferences(rawPreferences) {
+    if (Array.isArray(rawPreferences)) {
+      const builtIn = [];
+      const custom = [];
+
+      rawPreferences.forEach((entry) => {
+        const sanitized = sanitizeAttributeName(entry);
+        if (!sanitized) {
+          return;
+        }
+        const lower = sanitized.toLowerCase();
+        if (BUILT_IN_ATTRIBUTE_VALUES.includes(lower)) {
+          builtIn.push(lower);
+          return;
+        }
+        if (isValidAttributeFormat(lower)) {
+          custom.push(lower);
+        }
+      });
+
+      return {
+        builtInAttributes: ensureBuiltInSelection(builtIn),
+        customAttributes: uniqueCustomAttributes(custom),
+      };
+    }
+
+    if (rawPreferences && typeof rawPreferences === 'object') {
+      const rawBuiltIns = Array.isArray(rawPreferences.builtInAttributes)
+        ? rawPreferences.builtInAttributes
+        : [];
+      const rawCustom = Array.isArray(rawPreferences.customAttributes)
+        ? rawPreferences.customAttributes
+        : [];
+
+      const builtIn = ensureBuiltInSelection(
+        rawBuiltIns
+          .map((value) => sanitizeAttributeName(value).toLowerCase())
+          .filter((value) => BUILT_IN_ATTRIBUTE_VALUES.includes(value))
+      );
+
+      const custom = uniqueCustomAttributes(
+        rawCustom
+          .map((value) => sanitizeAttributeName(value).toLowerCase())
+          .filter((value) => value && isValidAttributeFormat(value))
+          .filter((value) => !BUILT_IN_ATTRIBUTE_VALUES.includes(value))
+      );
+
+      return { builtInAttributes: builtIn, customAttributes: custom };
+    }
+
+    return {
+      builtInAttributes: [...DEFAULT_PREFERENCES.builtInAttributes],
+      customAttributes: [...DEFAULT_PREFERENCES.customAttributes],
+    };
+  }
+
+  function buildPriorityList(preferences) {
+    const normalized = normalizeStoredPreferences(preferences);
+    const builtIn = normalized.builtInAttributes || [];
+    const seen = new Set(builtIn.map((value) => value.toLowerCase()));
+    const priority = [...builtIn];
+
+    (normalized.customAttributes || []).forEach((attribute) => {
+      const sanitized = sanitizeAttributeName(attribute);
+      if (!sanitized || !isValidAttributeFormat(sanitized)) {
+        return;
+      }
+      const lower = sanitized.toLowerCase();
+      if (seen.has(lower)) {
+        return;
+      }
+      seen.add(lower);
+      priority.push(sanitized);
+    });
+
+    return priority.length ? priority : [...DEFAULT_PREFERENCES.builtInAttributes];
+  }
+
+  function updateActiveAttributes(preferences) {
+    attributePriority = buildPriorityList(preferences);
+  }
 
   function initializeStyles() {
     if (!document.querySelector('#element-inspector-highlight-style')) {
@@ -78,14 +217,6 @@
     }
   }
 
-  function updateActiveAttributes(attributes) {
-    const sanitized = Array.isArray(attributes)
-      ? attributes.filter((attribute) => ATTRIBUTE_PRIORITY.includes(attribute))
-      : [];
-    activeAttributePreferences = sanitized.length ? sanitized : [...DEFAULT_ATTRIBUTE_PREFERENCES];
-    activeAttributeSet = new Set(activeAttributePreferences);
-  }
-
   function cssEscape(value) {
     if (typeof value !== 'string') {
       return '';
@@ -105,11 +236,7 @@
       return null;
     }
 
-    for (const attribute of ATTRIBUTE_PRIORITY) {
-      if (!activeAttributeSet.has(attribute)) {
-        continue;
-      }
-
+    for (const attribute of attributePriority) {
       let value = null;
       if (attribute === 'id') {
         value = element.id?.trim() || null;
@@ -176,15 +303,15 @@
 
   function refreshAttributesFromStorage() {
     if (!chrome?.storage?.sync) {
-      updateActiveAttributes(DEFAULT_ATTRIBUTE_PREFERENCES);
+      updateActiveAttributes(DEFAULT_PREFERENCES);
       return;
     }
 
-    chrome.storage.sync.get(['attributePreferences'], (result) => {
+    chrome.storage.sync.get([STORAGE_KEY], (result) => {
       if (chrome.runtime?.lastError) {
-        updateActiveAttributes(DEFAULT_ATTRIBUTE_PREFERENCES);
+        updateActiveAttributes(DEFAULT_PREFERENCES);
       } else {
-        updateActiveAttributes(result?.attributePreferences);
+        updateActiveAttributes(result?.[STORAGE_KEY]);
       }
 
       const activeElement = ensureCurrentElement();
@@ -206,11 +333,11 @@
 
   if (chrome?.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== 'sync' || !changes.attributePreferences) {
+      if (areaName !== 'sync' || !changes[STORAGE_KEY]) {
         return;
       }
 
-      updateActiveAttributes(changes.attributePreferences.newValue);
+      updateActiveAttributes(changes[STORAGE_KEY].newValue);
 
       const activeElement = ensureCurrentElement();
       if (activeElement) {
@@ -436,24 +563,41 @@
       return;
     }
 
-    if (!modalOpenMousePosition) {
-      if (typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+    if (!mouseIntentDetector) {
+      ensureMouseIntentDetector();
+      if (!modalOpenMousePosition && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
         modalOpenMousePosition = { x: event.clientX, y: event.clientY };
       }
       return;
     }
 
-    const currentX = typeof event.clientX === 'number' ? event.clientX : modalOpenMousePosition.x;
-    const currentY = typeof event.clientY === 'number' ? event.clientY : modalOpenMousePosition.y;
-    const dx = currentX - modalOpenMousePosition.x;
-    const dy = currentY - modalOpenMousePosition.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > 280) {
-      handleEscape();
-      document.removeEventListener('mousemove', handleModalMouseMove, true);
-      modalOpenMousePosition = null;
+    if (!modalOpenMousePosition && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+      modalOpenMousePosition = { x: event.clientX, y: event.clientY };
+      const modalElement = document.querySelector('#e2e-prompt-modal');
+      if (modalElement) {
+        try {
+          mouseIntentDetector.stopTracking();
+          mouseIntentDetector.startTracking(modalElement, modalOpenMousePosition);
+        } catch (error) {
+          console.warn('[E2E Prompt Builder] Failed to start detector on first move', error);
+        }
+      }
+      return;
     }
+
+    const result = mouseIntentDetector.evaluate(event);
+    if (!result || !result.shouldClose) {
+      return;
+    }
+
+    document.removeEventListener('mousemove', handleModalMouseMove, true);
+    modalOpenMousePosition = null;
+    try {
+      mouseIntentDetector.stopTracking();
+    } catch (error) {
+      console.warn('[E2E Prompt Builder] Failed to stop detector', error);
+    }
+    handleEscape();
   }
 
   function updateOverlayPosition(element) {
@@ -656,6 +800,35 @@
     }
     document.removeEventListener('mousemove', handleModalMouseMove, true);
     document.addEventListener('mousemove', handleModalMouseMove, true);
+    ensureMouseIntentDetector().then((detector) => {
+      if (!detector) {
+        return;
+      }
+
+      const modalElement = document.querySelector('#e2e-prompt-modal');
+      if (!modalElement) {
+        return;
+      }
+
+      const fallbackPoint = lastMousePosition
+        ? { x: lastMousePosition.x, y: lastMousePosition.y }
+        : null;
+      const startingPoint = modalOpenMousePosition || fallbackPoint;
+
+      try {
+        detector.stopTracking();
+      } catch (error) {
+        console.warn('[E2E Prompt Builder] Failed to reset detector', error);
+      }
+
+      if (startingPoint) {
+        try {
+          detector.startTracking(modalElement, startingPoint);
+        } catch (error) {
+          console.warn('[E2E Prompt Builder] Failed to start detector', error);
+        }
+      }
+    });
 
     showModalUI();
 
@@ -676,6 +849,13 @@
     state.isModalOpen = false;
     document.removeEventListener('mousemove', handleModalMouseMove, true);
     modalOpenMousePosition = null;
+    if (mouseIntentDetector) {
+      try {
+        mouseIntentDetector.stopTracking();
+      } catch (error) {
+        console.warn('[E2E Prompt Builder] Failed to stop detector on close', error);
+      }
+    }
     hideModalUI();
   }
 

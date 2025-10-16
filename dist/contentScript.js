@@ -6,6 +6,25 @@
   let lastOverlayRect = null;
   let lastMousePosition = null;
   let modalOpenMousePosition = null;
+  let mouseIntentDetector = null;
+  const mouseIntentDetectorPromise = import(chrome.runtime.getURL('mouseIntentDetector.js'))
+    .then((module) => {
+      const DetectorClass = module?.default ?? module.MouseIntentDetector ?? module;
+      if (typeof DetectorClass !== 'function') {
+        throw new TypeError('MouseIntentDetector module did not provide a constructor.');
+      }
+      mouseIntentDetector = new DetectorClass({ distanceThreshold: 280 });
+      return mouseIntentDetector;
+    })
+    .catch((error) => {
+      console.warn('[E2E Prompt Builder] Failed to load MouseIntentDetector', error);
+      mouseIntentDetector = null;
+      return null;
+    });
+
+  function ensureMouseIntentDetector() {
+    return mouseIntentDetectorPromise;
+  }
 
   const ATTRIBUTE_PRIORITY = ['id', 'data-testid', 'data-test', 'class', 'aria-label', 'name', 'placeholder'];
   const DEFAULT_ATTRIBUTE_PREFERENCES = ['id'];
@@ -436,24 +455,41 @@
       return;
     }
 
-    if (!modalOpenMousePosition) {
-      if (typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+    if (!mouseIntentDetector) {
+      ensureMouseIntentDetector();
+      if (!modalOpenMousePosition && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
         modalOpenMousePosition = { x: event.clientX, y: event.clientY };
       }
       return;
     }
 
-    const currentX = typeof event.clientX === 'number' ? event.clientX : modalOpenMousePosition.x;
-    const currentY = typeof event.clientY === 'number' ? event.clientY : modalOpenMousePosition.y;
-    const dx = currentX - modalOpenMousePosition.x;
-    const dy = currentY - modalOpenMousePosition.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > 280) {
-      handleEscape();
-      document.removeEventListener('mousemove', handleModalMouseMove, true);
-      modalOpenMousePosition = null;
+    if (!modalOpenMousePosition && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+      modalOpenMousePosition = { x: event.clientX, y: event.clientY };
+      const modalElement = document.querySelector('#e2e-prompt-modal');
+      if (modalElement) {
+        try {
+          mouseIntentDetector.stopTracking();
+          mouseIntentDetector.startTracking(modalElement, modalOpenMousePosition);
+        } catch (error) {
+          console.warn('[E2E Prompt Builder] Failed to start detector on first move', error);
+        }
+      }
+      return;
     }
+
+    const result = mouseIntentDetector.evaluate(event);
+    if (!result || !result.shouldClose) {
+      return;
+    }
+
+    document.removeEventListener('mousemove', handleModalMouseMove, true);
+    modalOpenMousePosition = null;
+    try {
+      mouseIntentDetector.stopTracking();
+    } catch (error) {
+      console.warn('[E2E Prompt Builder] Failed to stop detector', error);
+    }
+    handleEscape();
   }
 
   function updateOverlayPosition(element) {
@@ -656,6 +692,35 @@
     }
     document.removeEventListener('mousemove', handleModalMouseMove, true);
     document.addEventListener('mousemove', handleModalMouseMove, true);
+    ensureMouseIntentDetector().then((detector) => {
+      if (!detector) {
+        return;
+      }
+
+      const modalElement = document.querySelector('#e2e-prompt-modal');
+      if (!modalElement) {
+        return;
+      }
+
+      const fallbackPoint = lastMousePosition
+        ? { x: lastMousePosition.x, y: lastMousePosition.y }
+        : null;
+      const startingPoint = modalOpenMousePosition || fallbackPoint;
+
+      try {
+        detector.stopTracking();
+      } catch (error) {
+        console.warn('[E2E Prompt Builder] Failed to reset detector', error);
+      }
+
+      if (startingPoint) {
+        try {
+          detector.startTracking(modalElement, startingPoint);
+        } catch (error) {
+          console.warn('[E2E Prompt Builder] Failed to start detector', error);
+        }
+      }
+    });
 
     showModalUI();
 
@@ -676,6 +741,13 @@
     state.isModalOpen = false;
     document.removeEventListener('mousemove', handleModalMouseMove, true);
     modalOpenMousePosition = null;
+    if (mouseIntentDetector) {
+      try {
+        mouseIntentDetector.stopTracking();
+      } catch (error) {
+        console.warn('[E2E Prompt Builder] Failed to stop detector on close', error);
+      }
+    }
     hideModalUI();
   }
 
