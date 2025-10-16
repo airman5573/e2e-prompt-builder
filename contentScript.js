@@ -443,7 +443,7 @@
     const dy = currentY - modalOpenMousePosition.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance > 80) {
+    if (distance > 280) {
       handleEscape();
       document.removeEventListener('mousemove', handleModalMouseMove, true);
       modalOpenMousePosition = null;
