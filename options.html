@@ -129,6 +129,11 @@
       .status.visible {
         opacity: 1;
       }
+      .shortcut-hint {
+        margin-top: 16px;
+        font-size: 14px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -190,6 +195,7 @@
         <button type="button" id="save-button">Save Settings</button>
         <span id="status" class="status" role="status" aria-live="polite">Saved!</span>
       </div>
+      <p class="shortcut-hint">Enter: 다음단계 | Cmd+Enter: 단계추가 | ESC: 현재단계유지</p>
     </main>
     <script src="options.js"></script>
   </body>

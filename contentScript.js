@@ -304,6 +304,12 @@
         return;
       }
 
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        handleCommandEnter();
+        return;
+      }
+
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         handleEnter();
@@ -336,7 +342,7 @@
     `;
 
     const hintText = document.createElement('span');
-    hintText.textContent = 'Enter: 다음단계 | ESC: 현재단계유지';
+    hintText.textContent = 'Enter: 다음단계 | Cmd+Enter: 단계추가 | ESC: 현재단계유지';
     hintText.style.cssText = `
       font-size: 12px;
       color: #6b7280;
@@ -671,6 +677,25 @@
     document.removeEventListener('mousemove', handleModalMouseMove, true);
     modalOpenMousePosition = null;
     hideModalUI();
+  }
+
+  function handleCommandEnter() {
+    const textarea = getTextarea();
+    if (!textarea) {
+      return;
+    }
+
+    state.promptText = textarea.value;
+    state.caretPosition = textarea.selectionStart;
+
+    state.currentStepNumber += 1;
+    state.promptText = `${state.promptText}\n${state.currentStepNumber}. `;
+    state.caretPosition = state.promptText.length;
+
+    textarea.value = state.promptText;
+    textarea.focus();
+    textarea.selectionStart = state.caretPosition;
+    textarea.selectionEnd = state.caretPosition;
   }
 
   function handleEnter() {
