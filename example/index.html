@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TodoList - E2E Prompt Builder 테스트</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    #app-container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    #header {
+      background: white;
+      border-radius: 12px 12px 0 0;
+      padding: 32px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    #app-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 8px;
+    }
+
+    #app-subtitle {
+      font-size: 14px;
+      color: #718096;
+    }
+
+    #main-content {
+      background: white;
+      padding: 24px 32px;
+    }
+
+    #input-section {
+      margin-bottom: 24px;
+    }
+
+    #todo-input-wrapper {
+      display: flex;
+      gap: 12px;
+    }
+
+    #todo-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    #todo-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    #add-todo-btn {
+      padding: 12px 24px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #add-todo-btn:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    #filter-section {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #f7fafc;
+      border-radius: 8px;
+    }
+
+    #filter-section button {
+      padding: 8px 16px;
+      border: 1px solid #cbd5e0;
+      background: white;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #filter-section button:hover {
+      background: #edf2f7;
+    }
+
+    #filter-section button.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    #todo-list {
+      list-style: none;
+    }
+
+    .todo-item {
+      padding: 16px;
+      margin-bottom: 8px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s;
+    }
+
+    .todo-item:hover {
+      background: #e9ecef;
+    }
+
+    .todo-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .todo-text {
+      flex: 1;
+      font-size: 16px;
+      color: #2d3748;
+    }
+
+    .todo-text.completed {
+      text-decoration: line-through;
+      color: #a0aec0;
+    }
+
+    .todo-delete-btn {
+      padding: 6px 12px;
+      background: #fc8181;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .todo-delete-btn:hover {
+      background: #f56565;
+    }
+
+    #footer {
+      background: white;
+      border-radius: 0 0 12px 12px;
+      padding: 20px 32px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    #stats-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    #todo-count {
+      font-size: 14px;
+      color: #718096;
+    }
+
+    #clear-completed-btn {
+      padding: 8px 16px;
+      background: #e53e3e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #clear-completed-btn:hover {
+      background: #c53030;
+    }
+
+    #action-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    #help-btn,
+    #about-btn {
+      padding: 10px 20px;
+      background: #48bb78;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #help-btn:hover,
+    #about-btn:hover {
+      background: #38a169;
+    }
+
+    /* Modal */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #modal-overlay.active {
+      display: flex;
+    }
+
+    #modal-container {
+      background: white;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow: auto;
+    }
+
+    #modal-header {
+      padding: 24px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    #modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a202c;
+    }
+
+    #modal-body {
+      padding: 24px;
+    }
+
+    #modal-text {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #4a5568;
+    }
+
+    #modal-footer {
+      padding: 20px 24px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    #modal-close-btn {
+      padding: 10px 24px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #modal-close-btn:hover {
+      background: #5568d3;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #a0aec0;
+    }
+
+    #empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    #empty-message {
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <header id="header">
+      <h1 id="app-title">📝 TodoList</h1>
+      <p id="app-subtitle">E2E Prompt Builder 테스트를 위한 예제 페이지</p>
+    </header>
+
+    <main id="main-content">
+      <section id="input-section">
+        <div id="todo-input-wrapper">
+          <input
+            type="text"
+            id="todo-input"
+            placeholder="새로운 할 일을 입력하세요..."
+            aria-label="새로운 할 일"
+          />
+          <button id="add-todo-btn">추가</button>
+        </div>
+      </section>
+
+      <section id="filter-section">
+        <button id="filter-all-btn" class="active">전체</button>
+        <button id="filter-active-btn">진행중</button>
+        <button id="filter-completed-btn">완료</button>
+      </section>
+
+      <section id="list-section">
+        <ul id="todo-list">
+          <!-- Sample todos with IDs -->
+          <li id="todo-item-1" class="todo-item">
+            <input type="checkbox" id="checkbox-1" class="todo-checkbox" />
+            <span id="text-1" class="todo-text">E2E Prompt Builder Extension 설치하기</span>
+            <button id="delete-btn-1" class="todo-delete-btn">삭제</button>
+          </li>
+          <li id="todo-item-2" class="todo-item">
+            <input type="checkbox" id="checkbox-2" class="todo-checkbox" />
+            <span id="text-2" class="todo-text">Extension 활성화하고 요소 hover 해보기</span>
+            <button id="delete-btn-2" class="todo-delete-btn">삭제</button>
+          </li>
+          <li id="todo-item-3" class="todo-item">
+            <input type="checkbox" id="checkbox-3" class="todo-checkbox" />
+            <span id="text-3" class="todo-text">Space 키로 프롬프트 모달 열어보기</span>
+            <button id="delete-btn-3" class="todo-delete-btn">삭제</button>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer id="footer">
+      <div id="stats-section">
+        <span id="todo-count">3개의 할 일</span>
+        <button id="clear-completed-btn">완료된 항목 삭제</button>
+      </div>
+      <div id="action-buttons">
+        <button id="help-btn">도움말</button>
+        <button id="about-btn">정보</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal-overlay">
+    <div id="modal-container">
+      <div id="modal-header">
+        <h2 id="modal-title">안내</h2>
+      </div>
+      <div id="modal-body">
+        <p id="modal-text">
+          이 페이지는 E2E Prompt Builder Extension을 테스트하기 위한 예제입니다.<br><br>
+
+          <strong>Extension 사용법:</strong><br>
+          1. Extension을 활성화하세요<br>
+          2. 마우스를 요소 위에 올려 하이라이트를 확인하세요<br>
+          3. 화살표 키(↑↓)로 부모/자식 요소로 이동할 수 있습니다<br>
+          4. Space 키를 눌러 프롬프트 모달을 열고 ID를 삽입하세요<br>
+          5. 텍스트를 입력하고 Enter로 다음 단계로 진행하세요<br>
+          6. ESC 키로 같은 단계에 여러 요소를 추가할 수 있습니다<br>
+          7. 복사 버튼으로 전체 프롬프트를 복사하세요<br><br>
+
+          모든 요소에 ID가 있어 Extension 테스트에 최적화되어 있습니다!
+        </p>
+      </div>
+      <div id="modal-footer">
+        <button id="modal-close-btn">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // TodoList 기능 구현
+    let todos = [
+      { id: 1, text: 'E2E Prompt Builder Extension 설치하기', completed: false },
+      { id: 2, text: 'Extension 활성화하고 요소 hover 해보기', completed: false },
+      { id: 3, text: 'Space 키로 프롬프트 모달 열어보기', completed: false }
+    ];
+    let filter = 'all';
+    let nextId = 4;
+
+    // DOM 요소
+    const todoInput = document.getElementById('todo-input');
+    const addBtn = document.getElementById('add-todo-btn');
+    const todoList = document.getElementById('todo-list');
+    const todoCount = document.getElementById('todo-count');
+    const clearCompletedBtn = document.getElementById('clear-completed-btn');
+    const filterAllBtn = document.getElementById('filter-all-btn');
+    const filterActiveBtn = document.getElementById('filter-active-btn');
+    const filterCompletedBtn = document.getElementById('filter-completed-btn');
+    const helpBtn = document.getElementById('help-btn');
+    const aboutBtn = document.getElementById('about-btn');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalTitle = document.getElementById('modal-title');
+    const modalText = document.getElementById('modal-text');
+
+    // 렌더링
+    function render() {
+      const filteredTodos = todos.filter(todo => {
+        if (filter === 'active') return !todo.completed;
+        if (filter === 'completed') return todo.completed;
+        return true;
+      });
+
+      if (filteredTodos.length === 0) {
+        todoList.innerHTML = `
+          <div id="empty-state" class="empty-state">
+            <div id="empty-icon">📭</div>
+            <div id="empty-message">할 일이 없습니다</div>
+          </div>
+        `;
+      } else {
+        todoList.innerHTML = filteredTodos.map(todo => `
+          <li id="todo-item-${todo.id}" class="todo-item">
+            <input
+              type="checkbox"
+              id="checkbox-${todo.id}"
+              class="todo-checkbox"
+              ${todo.completed ? 'checked' : ''}
+              onchange="toggleTodo(${todo.id})"
+            />
+            <span id="text-${todo.id}" class="todo-text ${todo.completed ? 'completed' : ''}">
+              ${todo.text}
+            </span>
+            <button id="delete-btn-${todo.id}" class="todo-delete-btn" onclick="deleteTodo(${todo.id})">
+              삭제
+            </button>
+          </li>
+        `).join('');
+      }
+
+      const activeCount = todos.filter(t => !t.completed).length;
+      todoCount.textContent = `${activeCount}개의 할 일`;
+    }
+
+    // Todo 추가
+    function addTodo() {
+      const text = todoInput.value.trim();
+      if (!text) return;
+
+      todos.push({ id: nextId++, text, completed: false });
+      todoInput.value = '';
+      render();
+    }
+
+    // Todo 토글
+    function toggleTodo(id) {
+      const todo = todos.find(t => t.id === id);
+      if (todo) {
+        todo.completed = !todo.completed;
+        render();
+      }
+    }
+
+    // Todo 삭제
+    function deleteTodo(id) {
+      todos = todos.filter(t => t.id !== id);
+      render();
+    }
+
+    // 완료된 항목 삭제
+    function clearCompleted() {
+      todos = todos.filter(t => !t.completed);
+      render();
+    }
+
+    // 필터 변경
+    function setFilter(newFilter) {
+      filter = newFilter;
+      document.querySelectorAll('#filter-section button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      if (newFilter === 'all') filterAllBtn.classList.add('active');
+      if (newFilter === 'active') filterActiveBtn.classList.add('active');
+      if (newFilter === 'completed') filterCompletedBtn.classList.add('active');
+
+      render();
+    }
+
+    // 모달 열기
+    function openModal(title, content) {
+      modalTitle.textContent = title;
+      modalText.innerHTML = content;
+      modalOverlay.classList.add('active');
+    }
+
+    // 모달 닫기
+    function closeModal() {
+      modalOverlay.classList.remove('active');
+    }
+
+    // 이벤트 리스너
+    addBtn.addEventListener('click', addTodo);
+    todoInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addTodo();
+    });
+    clearCompletedBtn.addEventListener('click', clearCompleted);
+    filterAllBtn.addEventListener('click', () => setFilter('all'));
+    filterActiveBtn.addEventListener('click', () => setFilter('active'));
+    filterCompletedBtn.addEventListener('click', () => setFilter('completed'));
+
+    helpBtn.addEventListener('click', () => {
+      openModal('도움말', `
+        <strong>Extension 사용법:</strong><br><br>
+        1. Extension을 활성화하세요<br>
+        2. 마우스를 요소 위에 올려 하이라이트를 확인하세요<br>
+        3. 화살표 키(↑↓)로 부모/자식 요소로 이동<br>
+        4. Space 키를 눌러 프롬프트 모달 열기<br>
+        5. Enter로 다음 단계, ESC로 현재 단계 유지<br>
+        6. 복사 버튼으로 전체 프롬프트 복사<br>
+      `);
+    });
+
+    aboutBtn.addEventListener('click', () => {
+      openModal('정보', `
+        <strong>E2E Prompt Builder 테스트 페이지</strong><br><br>
+        이 페이지는 Chrome Extension 테스트를 위해 제작되었습니다.<br>
+        모든 요소에 의미있는 ID가 부여되어 있어 Extension의 모든 기능을 테스트할 수 있습니다.<br><br>
+        버전: 1.0.0<br>
+        제작: PM Claude (Sonnet 4.5)
+      `);
+    });
+
+    modalCloseBtn.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+
+    // 전역 함수로 노출 (onclick에서 사용)
+    window.toggleTodo = toggleTodo;
+    window.deleteTodo = deleteTodo;
+
+    // 초기 렌더링
+    render();
+  </script>
+</body>
+</html>
