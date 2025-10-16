@@ -5,9 +5,16 @@
   let queuedElementForUpdate = null;
   let lastOverlayRect = null;
 
+  const ATTRIBUTE_PRIORITY = ['id', 'data-testid', 'data-test', 'class', 'aria-label', 'name', 'placeholder'];
+  const DEFAULT_ATTRIBUTE_PREFERENCES = ['id'];
+  let activeAttributePreferences = [...DEFAULT_ATTRIBUTE_PREFERENCES];
+  let activeAttributeSet = new Set(activeAttributePreferences);
+
   const state = {
     mode: 'highlight',
     currentElement: null,
+    currentSelector: null,
+    currentAttribute: null,
     promptText: '',
     currentStepNumber: 1,
     isModalOpen: false,
@@ -67,6 +74,155 @@
       `;
       document.head.appendChild(style);
     }
+  }
+
+  function updateActiveAttributes(attributes) {
+    const sanitized = Array.isArray(attributes)
+      ? attributes.filter((attribute) => ATTRIBUTE_PRIORITY.includes(attribute))
+      : [];
+    activeAttributePreferences = sanitized.length ? sanitized : [...DEFAULT_ATTRIBUTE_PREFERENCES];
+    activeAttributeSet = new Set(activeAttributePreferences);
+  }
+
+  function cssEscape(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(value);
+    }
+    return value.replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  function escapeAttributeValue(value) {
+    return typeof value === 'string' ? value.replace(/\\/g, '\\\\').replace(/"/g, '\\"') : '';
+  }
+
+  function getAttributeMatch(element) {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return null;
+    }
+
+    for (const attribute of ATTRIBUTE_PRIORITY) {
+      if (!activeAttributeSet.has(attribute)) {
+        continue;
+      }
+
+      let value = null;
+      if (attribute === 'id') {
+        value = element.id?.trim() || null;
+      } else if (attribute === 'class') {
+        const className = Array.from(element.classList || []).find(Boolean);
+        value = className || null;
+      } else {
+        const raw = element.getAttribute(attribute);
+        value = raw?.trim() || null;
+      }
+
+      if (value) {
+        return { attribute, value };
+      }
+    }
+    return null;
+  }
+
+  function buildSelectorFromMatch(match) {
+    if (!match) {
+      return null;
+    }
+    const { attribute, value } = match;
+    if (!attribute || !value) {
+      return null;
+    }
+
+    if (attribute === 'id') {
+      return `#${cssEscape(value)}`;
+    }
+
+    if (attribute === 'class') {
+      return `.${cssEscape(value)}`;
+    }
+
+    return `[${attribute}="${escapeAttributeValue(value)}"]`;
+  }
+
+  function getSelectorDetails(element) {
+    const match = getAttributeMatch(element);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      element,
+      attribute: match.attribute,
+      value: match.value,
+      selector: buildSelectorFromMatch(match),
+    };
+  }
+
+  function findElementBySelector(element) {
+    let current = element instanceof Element ? element : null;
+    while (current) {
+      const details = getSelectorDetails(current);
+      if (details && details.selector) {
+        return details;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  function refreshAttributesFromStorage() {
+    if (!chrome?.storage?.sync) {
+      updateActiveAttributes(DEFAULT_ATTRIBUTE_PREFERENCES);
+      return;
+    }
+
+    chrome.storage.sync.get(['attributePreferences'], (result) => {
+      if (chrome.runtime?.lastError) {
+        updateActiveAttributes(DEFAULT_ATTRIBUTE_PREFERENCES);
+      } else {
+        updateActiveAttributes(result?.attributePreferences);
+      }
+
+      const activeElement = ensureCurrentElement();
+      if (activeElement) {
+        const details = getSelectorDetails(activeElement);
+        if (details) {
+          highlightElement(details.element, details);
+        } else {
+          removeOverlay();
+          state.currentElement = null;
+          state.currentSelector = null;
+          state.currentAttribute = null;
+        }
+      }
+    });
+  }
+
+  refreshAttributesFromStorage();
+
+  if (chrome?.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'sync' || !changes.attributePreferences) {
+        return;
+      }
+
+      updateActiveAttributes(changes.attributePreferences.newValue);
+
+      const activeElement = ensureCurrentElement();
+      if (activeElement) {
+        const details = getSelectorDetails(activeElement);
+        if (details) {
+          highlightElement(details.element, details);
+        } else {
+          removeOverlay();
+          state.currentElement = null;
+          state.currentSelector = null;
+          state.currentAttribute = null;
+        }
+      }
+    });
   }
 
   function ensureModalUI() {
@@ -315,31 +471,30 @@
     }
   }
 
-  function findElementWithId(element) {
-    let current = element;
-    while (current && current !== document.body) {
-      if (current.id) {
-        return current;
-      }
-      current = current.parentElement;
-    }
-    return null;
-  }
-
   function ensureCurrentElement() {
     if (state.currentElement && document.contains(state.currentElement)) {
       return state.currentElement;
     }
     state.currentElement = null;
+    state.currentSelector = null;
+    state.currentAttribute = null;
     return null;
   }
 
-  function highlightElement(element) {
+  function highlightElement(element, selectorDetails) {
     if (!element || state.mode !== 'highlight') {
       return;
     }
 
+    const details = selectorDetails || getSelectorDetails(element);
+    if (!details || !details.selector) {
+      return;
+    }
+
     state.currentElement = element;
+    state.currentSelector = details.selector;
+    state.currentAttribute = details.attribute;
+
     createOverlay();
     updateOverlayPosition(element);
 
@@ -362,14 +517,15 @@
 
     let parent = activeElement.parentElement;
     while (parent) {
-      if (parent.id) {
-        highlightElement(parent);
+      const details = getSelectorDetails(parent);
+      if (details) {
+        highlightElement(parent, details);
         return;
       }
       parent = parent.parentElement;
     }
 
-    showSnackbar('⚠️ ID가 있는 부모를 찾을 수 없습니다', 1200, '#ff9800');
+    showSnackbar('⚠️ 사용할 수 있는 상위 요소가 없습니다', 1200, '#ff9800');
   }
 
   function navigateToChild() {
@@ -378,12 +534,13 @@
       return;
     }
 
-    const findChildWithId = (element) => {
+    const findChildWithMatch = (element) => {
       for (const child of element.children) {
-        if (child.id) {
-          return child;
+        const details = getSelectorDetails(child);
+        if (details) {
+          return details;
         }
-        const found = findChildWithId(child);
+        const found = findChildWithMatch(child);
         if (found) {
           return found;
         }
@@ -391,11 +548,11 @@
       return null;
     };
 
-    const child = findChildWithId(activeElement);
-    if (child) {
-      highlightElement(child);
+    const childDetails = findChildWithMatch(activeElement);
+    if (childDetails) {
+      highlightElement(childDetails.element, childDetails);
     } else {
-      showSnackbar('⚠️ ID가 있는 자식을 찾을 수 없습니다', 1200, '#ff9800');
+      showSnackbar('⚠️ 사용할 수 있는 하위 요소가 없습니다', 1200, '#ff9800');
     }
   }
 
@@ -406,8 +563,14 @@
 
   function openModal() {
     const elementForPrompt = ensureCurrentElement();
-    if (!elementForPrompt || !elementForPrompt.id) {
-      showSnackbar('⚠️ ID를 찾을 수 없습니다');
+    if (!elementForPrompt) {
+      showSnackbar('⚠️ 선택된 요소가 없습니다');
+      return;
+    }
+
+    const details = getSelectorDetails(elementForPrompt);
+    if (!details || !details.selector) {
+      showSnackbar('⚠️ 사용할 수 있는 속성을 찾을 수 없습니다');
       return;
     }
 
@@ -417,7 +580,10 @@
       return;
     }
 
-    const elementToken = `#${elementForPrompt.id} `;
+    state.currentSelector = details.selector;
+    state.currentAttribute = details.attribute;
+
+    const elementToken = `${details.selector} `;
     const isFirstStep = state.promptText === '' && state.currentStepNumber === 1;
 
     if (isFirstStep) {
@@ -513,17 +679,19 @@
       return;
     }
 
-    const elementWithId = event.target?.id ? event.target : findElementWithId(event.target);
-    if (!elementWithId || !elementWithId.id) {
+    const details = findElementBySelector(event.target);
+    if (!details) {
       return;
     }
 
-    if (state.currentElement === elementWithId) {
-      updateOverlayPosition(elementWithId);
+    if (state.currentElement === details.element) {
+      state.currentSelector = details.selector;
+      state.currentAttribute = details.attribute;
+      updateOverlayPosition(details.element);
       return;
     }
 
-    highlightElement(elementWithId);
+    highlightElement(details.element, details);
   }
 
   function handleMouseOut(event) {
@@ -534,6 +702,8 @@
     if (state.currentElement === event.target) {
       removeOverlay();
       state.currentElement = null;
+      state.currentSelector = null;
+      state.currentAttribute = null;
     }
   }
 
@@ -609,6 +779,9 @@
     hideModalUI();
     state.mode = 'highlight';
     state.isModalOpen = false;
+    state.currentElement = null;
+    state.currentSelector = null;
+    state.currentAttribute = null;
     inspectorEnabled = false;
 
     const snackbar = document.querySelector('.element-inspector-snackbar');
