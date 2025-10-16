@@ -478,6 +478,12 @@
     state.promptText = textarea.value;
     state.caretPosition = textarea.selectionStart;
 
+    // Auto-add space at end if missing (for natural spacing on next insertion)
+    if (!state.promptText.endsWith(' ')) {
+      state.promptText += ' ';
+      state.caretPosition = state.promptText.length;
+    }
+
     closeModal();
   }
 
