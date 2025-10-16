@@ -201,6 +201,12 @@
       navigator.clipboard.writeText(state.promptText).then(() => {
         copyButton.textContent = '복사됨!';
         window.setTimeout(() => {
+          if (state.isModalOpen) {
+            closeModal();
+          }
+        }, 500);
+
+        window.setTimeout(() => {
           copyButton.textContent = '복사하기';
         }, 2000);
       }).catch(() => {
