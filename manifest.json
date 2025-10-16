@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Element Inspector",
+  "name": "E2E Prompt Builder for AI",
   "version": "1.0.0",
-  "description": "Highlight DOM elements, navigate with the keyboard, and copy element IDs from any page.",
+  "description": "Build E2E test scenarios step-by-step by selecting elements and generating AI-ready prompts with keyboard shortcuts.",
   "action": {
-    "default_title": "Toggle Element Inspector",
+    "default_title": "Toggle E2E Prompt Builder",
     "default_icon": {
       "16": "icons/inspector-off-16.png",
       "32": "icons/inspector-off-32.png",
