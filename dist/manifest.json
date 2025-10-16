@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "E2E Prompt Builder for AI",
+  "version": "1.0.0",
+  "description": "Build E2E test scenarios step-by-step by selecting elements and generating AI-ready prompts with keyboard shortcuts.",
+  "action": {
+    "default_title": "Toggle E2E Prompt Builder",
+    "default_icon": {
+      "16": "icons/inspector-off-16.png",
+      "32": "icons/inspector-off-32.png",
+      "48": "icons/inspector-off-48.png",
+      "128": "icons/inspector-off-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "permissions": ["tabs", "storage"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/inspector-off-16.png",
+    "32": "icons/inspector-off-32.png",
+    "48": "icons/inspector-off-48.png",
+    "128": "icons/inspector-off-128.png"
+  }
+}

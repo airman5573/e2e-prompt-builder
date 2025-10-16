@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attribute Selection</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: #e2e8f0;
+        --accent: #2563eb;
+        --accent-hover: #1e4fd0;
+        --radius: 12px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --card-bg: #1e293b;
+          --text: #e2e8f0;
+          --muted: #94a3b8;
+          --border: #334155;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      main {
+        width: 100%;
+        max-width: 480px;
+        background-color: var(--card-bg);
+        border-radius: var(--radius);
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+        padding: 32px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p.description {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .checkbox-list {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(37, 99, 235, 0.04);
+        transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+        cursor: pointer;
+      }
+      label:hover {
+        border-color: var(--accent);
+        background-color: rgba(37, 99, 235, 0.08);
+        transform: translateY(-1px);
+      }
+      input[type='checkbox'] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+      .label-text {
+        display: flex;
+        flex-direction: column;
+      }
+      .primary {
+        font-weight: 500;
+      }
+      .secondary {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      button {
+        border: none;
+        border-radius: 999px;
+        padding: 10px 22px;
+        font-size: 15px;
+        font-weight: 500;
+        background-color: var(--accent);
+        color: #ffffff;
+        cursor: pointer;
+        transition: background-color 0.2s ease, transform 0.2s ease;
+      }
+      button:hover {
+        background-color: var(--accent-hover);
+        transform: translateY(-1px);
+      }
+      button:active {
+        transform: translateY(0);
+      }
+      .status {
+        font-size: 14px;
+        color: var(--muted);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .status.visible {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Attribute Selection</h1>
+      <p class="description">Choose which HTML attributes you want to capture when creating your E2E prompts.</p>
+      <form id="options-form" class="checkbox-list">
+        <label>
+          <input type="checkbox" name="attribute" value="id" checked />
+          <span class="label-text">
+            <span class="primary">ID</span>
+            <span class="secondary">Unique element identifiers</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="class" />
+          <span class="label-text">
+            <span class="primary">Class</span>
+            <span class="secondary">Reusable styling hooks</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="data-testid" />
+          <span class="label-text">
+            <span class="primary">data-testid</span>
+            <span class="secondary">Testing attributes for component libraries</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="data-test" />
+          <span class="label-text">
+            <span class="primary">data-test</span>
+            <span class="secondary">Alternate testing attribute</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="aria-label" />
+          <span class="label-text">
+            <span class="primary">aria-label</span>
+            <span class="secondary">Accessible labels for screen readers</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="name" />
+          <span class="label-text">
+            <span class="primary">Name</span>
+            <span class="secondary">Form field names and identifiers</span>
+          </span>
+        </label>
+        <label>
+          <input type="checkbox" name="attribute" value="placeholder" />
+          <span class="label-text">
+            <span class="primary">Placeholder</span>
+            <span class="secondary">Input hint text</span>
+          </span>
+        </label>
+      </form>
+      <div class="actions">
+        <button type="button" id="save-button">Save Settings</button>
+        <span id="status" class="status" role="status" aria-live="polite">Saved!</span>
+      </div>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
